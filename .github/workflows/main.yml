@@ -51,7 +51,6 @@ jobs:
         EXCLUDED: ${{ secrets.EXCLUDED }}
         EXCLUDED_LANGS: ${{ secrets.EXCLUDED_LANGS }}
         EXCLUDE_FORKED_REPOS: true
-        SKIP_SLOW_STATS: true  # Skip lines_changed and views to speed up action
 
     # Commit all changed files to the repository
     - name: Commit to the repo
