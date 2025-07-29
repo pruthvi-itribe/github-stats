@@ -39,9 +39,16 @@ async def generate_overview(s: Stats) -> None:
     output = re.sub("{{ stars }}", f"{await s.stargazers:,}", output)
     output = re.sub("{{ forks }}", f"{await s.forks:,}", output)
     output = re.sub("{{ contributions }}", f"{await s.total_contributions:,}", output)
-    changed = (await s.lines_changed)[0] + (await s.lines_changed)[1]
-    output = re.sub("{{ lines_changed }}", f"{changed:,}", output)
-    output = re.sub("{{ views }}", f"{await s.views:,}", output)
+    # Optional: Skip lines_changed and views to avoid slow API calls
+    skip_slow_stats = os.getenv("SKIP_SLOW_STATS", "false").lower() == "true"
+    
+    if skip_slow_stats:
+        output = re.sub("{{ lines_changed }}", "N/A", output)
+        output = re.sub("{{ views }}", "N/A", output)
+    else:
+        changed = (await s.lines_changed)[0] + (await s.lines_changed)[1]
+        output = re.sub("{{ lines_changed }}", f"{changed:,}", output)
+        output = re.sub("{{ views }}", f"{await s.views:,}", output)
     output = re.sub("{{ repos }}", f"{len(await s.repos):,}", output)
 
     generate_output_folder()

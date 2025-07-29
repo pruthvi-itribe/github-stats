@@ -73,7 +73,7 @@ class Queries(object):
         :return: deserialized REST JSON output
         """
 
-        for _ in range(60):
+        for attempt in range(10):  # Reduced from 60 to 10 attempts
             headers = {
                 "Authorization": f"token {self.access_token}",
             }
@@ -90,15 +90,17 @@ class Queries(object):
                     )
                 if r_async.status == 202:
                     # print(f"{path} returned 202. Retrying...")
-                    print(f"A path returned 202. Retrying...")
-                    await asyncio.sleep(2)
+                    if attempt < 3:  # Only print first 3 retries to reduce log spam
+                        print(f"A path returned 202. Retrying... (attempt {attempt + 1}/10)")
+                    await asyncio.sleep(min(1 + attempt * 0.5, 5))  # Progressive backoff: 1s, 1.5s, 2s... up to 5s
                     continue
 
                 result = await r_async.json()
                 if result is not None:
                     return result
             except:
-                print("aiohttp failed for rest query")
+                if attempt == 0:  # Only print error on first attempt
+                    print("aiohttp failed for rest query")
                 # Fall back on non-async requests
                 async with self.semaphore:
                     r_requests = requests.get(
@@ -107,8 +109,9 @@ class Queries(object):
                         params=tuple(params.items()),
                     )
                     if r_requests.status_code == 202:
-                        print(f"A path returned 202. Retrying...")
-                        await asyncio.sleep(2)
+                        if attempt < 3:
+                            print(f"A path returned 202. Retrying... (attempt {attempt + 1}/10)")
+                        await asyncio.sleep(min(1 + attempt * 0.5, 5))
                         continue
                     elif r_requests.status_code == 200:
                         return r_requests.json()
