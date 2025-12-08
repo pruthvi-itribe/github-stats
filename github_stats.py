@@ -479,15 +479,26 @@ Languages:
             )
         return cast(int, self._total_contributions)
 
-    @property
-    async def lines_changed(self) -> Tuple[int, int]:
+    async def _calculate_all_lines_changed(self) -> None:
         """
-        :return: count of total lines added, removed, or modified by the user
+        Calculate lines changed for all time and different time periods (week, month, year).
+        Makes a single pass through the API to avoid duplicate calls.
         """
-        if self._lines_changed is not None:
-            return self._lines_changed
-        additions = 0
-        deletions = 0
+        if self._lines_changed is not None and self._lines_changed_by_time is not None:
+            return
+
+        now = int(time.time())
+        one_week_ago = now - (7 * 24 * 60 * 60)
+        one_month_ago = now - (30 * 24 * 60 * 60)
+        one_year_ago = now - (365 * 24 * 60 * 60)
+
+        # All-time totals
+        total_additions, total_deletions = 0, 0
+        # Time-based totals
+        week_additions, week_deletions = 0, 0
+        month_additions, month_deletions = 0, 0
+        year_additions, year_deletions = 0, 0
+
         for repo in await self.repos:
             r = await self.queries.query_rest(f"/repos/{repo}/stats/contributors")
             for author_obj in r:
@@ -501,45 +512,15 @@ Languages:
                     continue
 
                 for week in author_obj.get("weeks", []):
-                    additions += week.get("a", 0)
-                    deletions += week.get("d", 0)
-
-        self._lines_changed = (additions, deletions)
-        return self._lines_changed
-
-    async def _calculate_lines_changed_by_time(self) -> None:
-        """
-        Calculate lines changed for different time periods (week, month, year).
-        Uses the same API as lines_changed but filters by timestamp.
-        """
-        if self._lines_changed_by_time is not None:
-            return
-
-        now = int(time.time())
-        one_week_ago = now - (7 * 24 * 60 * 60)
-        one_month_ago = now - (30 * 24 * 60 * 60)
-        one_year_ago = now - (365 * 24 * 60 * 60)
-
-        week_additions, week_deletions = 0, 0
-        month_additions, month_deletions = 0, 0
-        year_additions, year_deletions = 0, 0
-
-        for repo in await self.repos:
-            r = await self.queries.query_rest(f"/repos/{repo}/stats/contributors")
-            for author_obj in r:
-                if not isinstance(author_obj, dict) or not isinstance(
-                    author_obj.get("author", {}), dict
-                ):
-                    continue
-                author = author_obj.get("author", {}).get("login", "")
-                if author != self.username:
-                    continue
-
-                for week in author_obj.get("weeks", []):
                     week_timestamp = week.get("w", 0)
                     additions = week.get("a", 0)
                     deletions = week.get("d", 0)
 
+                    # All-time totals
+                    total_additions += additions
+                    total_deletions += deletions
+
+                    # Time-based totals
                     if week_timestamp >= one_week_ago:
                         week_additions += additions
                         week_deletions += deletions
@@ -550,6 +531,7 @@ Languages:
                         year_additions += additions
                         year_deletions += deletions
 
+        self._lines_changed = (total_additions, total_deletions)
         self._lines_changed_by_time = {
             "week": (week_additions, week_deletions),
             "month": (month_additions, month_deletions),
@@ -557,11 +539,23 @@ Languages:
         }
 
     @property
+    async def lines_changed(self) -> Tuple[int, int]:
+        """
+        :return: count of total lines added, removed, or modified by the user
+        """
+        if self._lines_changed is not None:
+            return self._lines_changed
+        await self._calculate_all_lines_changed()
+        assert self._lines_changed is not None
+        return self._lines_changed
+
+    @property
     async def lines_changed_past_week(self) -> Tuple[int, int]:
         """
         :return: tuple of (additions, deletions) for the past week
         """
-        await self._calculate_lines_changed_by_time()
+        if self._lines_changed_by_time is None:
+            await self._calculate_all_lines_changed()
         assert self._lines_changed_by_time is not None
         return self._lines_changed_by_time["week"]
 
@@ -570,7 +564,8 @@ Languages:
         """
         :return: tuple of (additions, deletions) for the past month (30 days)
         """
-        await self._calculate_lines_changed_by_time()
+        if self._lines_changed_by_time is None:
+            await self._calculate_all_lines_changed()
         assert self._lines_changed_by_time is not None
         return self._lines_changed_by_time["month"]
 
@@ -579,7 +574,8 @@ Languages:
         """
         :return: tuple of (additions, deletions) for the past year (365 days)
         """
-        await self._calculate_lines_changed_by_time()
+        if self._lines_changed_by_time is None:
+            await self._calculate_all_lines_changed()
         assert self._lines_changed_by_time is not None
         return self._lines_changed_by_time["year"]
 
