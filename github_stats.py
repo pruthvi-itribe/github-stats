@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+import time
 from typing import Dict, List, Optional, Set, Tuple, Any, cast
 
 import aiohttp
@@ -276,6 +277,7 @@ class Stats(object):
         self._repos: Optional[Set[str]] = None
         self._lines_changed: Optional[Tuple[int, int]] = None
         self._views: Optional[int] = None
+        self._lines_changed_by_time: Optional[Dict[str, Tuple[int, int]]] = None
 
     async def to_str(self) -> str:
         """
@@ -504,6 +506,82 @@ Languages:
 
         self._lines_changed = (additions, deletions)
         return self._lines_changed
+
+    async def _calculate_lines_changed_by_time(self) -> None:
+        """
+        Calculate lines changed for different time periods (week, month, year).
+        Uses the same API as lines_changed but filters by timestamp.
+        """
+        if self._lines_changed_by_time is not None:
+            return
+
+        now = int(time.time())
+        one_week_ago = now - (7 * 24 * 60 * 60)
+        one_month_ago = now - (30 * 24 * 60 * 60)
+        one_year_ago = now - (365 * 24 * 60 * 60)
+
+        week_additions, week_deletions = 0, 0
+        month_additions, month_deletions = 0, 0
+        year_additions, year_deletions = 0, 0
+
+        for repo in await self.repos:
+            r = await self.queries.query_rest(f"/repos/{repo}/stats/contributors")
+            for author_obj in r:
+                if not isinstance(author_obj, dict) or not isinstance(
+                    author_obj.get("author", {}), dict
+                ):
+                    continue
+                author = author_obj.get("author", {}).get("login", "")
+                if author != self.username:
+                    continue
+
+                for week in author_obj.get("weeks", []):
+                    week_timestamp = week.get("w", 0)
+                    additions = week.get("a", 0)
+                    deletions = week.get("d", 0)
+
+                    if week_timestamp >= one_week_ago:
+                        week_additions += additions
+                        week_deletions += deletions
+                    if week_timestamp >= one_month_ago:
+                        month_additions += additions
+                        month_deletions += deletions
+                    if week_timestamp >= one_year_ago:
+                        year_additions += additions
+                        year_deletions += deletions
+
+        self._lines_changed_by_time = {
+            "week": (week_additions, week_deletions),
+            "month": (month_additions, month_deletions),
+            "year": (year_additions, year_deletions),
+        }
+
+    @property
+    async def lines_changed_past_week(self) -> Tuple[int, int]:
+        """
+        :return: tuple of (additions, deletions) for the past week
+        """
+        await self._calculate_lines_changed_by_time()
+        assert self._lines_changed_by_time is not None
+        return self._lines_changed_by_time["week"]
+
+    @property
+    async def lines_changed_past_month(self) -> Tuple[int, int]:
+        """
+        :return: tuple of (additions, deletions) for the past month (30 days)
+        """
+        await self._calculate_lines_changed_by_time()
+        assert self._lines_changed_by_time is not None
+        return self._lines_changed_by_time["month"]
+
+    @property
+    async def lines_changed_past_year(self) -> Tuple[int, int]:
+        """
+        :return: tuple of (additions, deletions) for the past year (365 days)
+        """
+        await self._calculate_lines_changed_by_time()
+        assert self._lines_changed_by_time is not None
+        return self._lines_changed_by_time["year"]
 
     @property
     async def views(self) -> int:
