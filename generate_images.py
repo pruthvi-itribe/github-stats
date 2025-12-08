@@ -44,10 +44,22 @@ async def generate_overview(s: Stats) -> None:
     
     if skip_slow_stats:
         output = re.sub("{{ lines_changed }}", "N/A", output)
+        output = re.sub("{{ lines_week }}", "N/A", output)
+        output = re.sub("{{ lines_month }}", "N/A", output)
+        output = re.sub("{{ lines_year }}", "N/A", output)
         output = re.sub("{{ views }}", "N/A", output)
     else:
         changed = (await s.lines_changed)[0] + (await s.lines_changed)[1]
         output = re.sub("{{ lines_changed }}", f"{changed:,}", output)
+
+        # Lines changed for different time periods
+        week_lines = (await s.lines_changed_past_week)[0] + (await s.lines_changed_past_week)[1]
+        month_lines = (await s.lines_changed_past_month)[0] + (await s.lines_changed_past_month)[1]
+        year_lines = (await s.lines_changed_past_year)[0] + (await s.lines_changed_past_year)[1]
+        output = re.sub("{{ lines_week }}", f"{week_lines:,}", output)
+        output = re.sub("{{ lines_month }}", f"{month_lines:,}", output)
+        output = re.sub("{{ lines_year }}", f"{year_lines:,}", output)
+
         output = re.sub("{{ views }}", f"{await s.views:,}", output)
     output = re.sub("{{ repos }}", f"{len(await s.repos):,}", output)
 
