@@ -486,31 +486,15 @@ Languages:
         """
         if self._lines_changed is not None:
             return self._lines_changed
-        additions = 0
-        deletions = 0
-        for repo in await self.repos:
-            r = await self.queries.query_rest(f"/repos/{repo}/stats/contributors")
-            for author_obj in r:
-                # Handle malformed response from the API by skipping this repo
-                if not isinstance(author_obj, dict) or not isinstance(
-                    author_obj.get("author", {}), dict
-                ):
-                    continue
-                author = author_obj.get("author", {}).get("login", "")
-                if author != self.username:
-                    continue
-
-                for week in author_obj.get("weeks", []):
-                    additions += week.get("a", 0)
-                    deletions += week.get("d", 0)
-
-        self._lines_changed = (additions, deletions)
+        # Use consolidated calculation to ensure consistency with time-filtered values
+        await self._calculate_lines_changed_by_time()
+        assert self._lines_changed is not None
         return self._lines_changed
 
     async def _calculate_lines_changed_by_time(self) -> None:
         """
-        Calculate lines changed for different time periods (week, month, year).
-        Uses the same API as lines_changed but filters by timestamp.
+        Calculate lines changed for different time periods (week, month, year, all time).
+        Uses a single batch of API calls to ensure consistency across all metrics.
         """
         if self._lines_changed_by_time is not None:
             return
@@ -523,6 +507,7 @@ Languages:
         week_additions, week_deletions = 0, 0
         month_additions, month_deletions = 0, 0
         year_additions, year_deletions = 0, 0
+        all_additions, all_deletions = 0, 0
 
         for repo in await self.repos:
             r = await self.queries.query_rest(f"/repos/{repo}/stats/contributors")
@@ -540,6 +525,10 @@ Languages:
                     additions = week.get("a", 0)
                     deletions = week.get("d", 0)
 
+                    # Always count for all-time total
+                    all_additions += additions
+                    all_deletions += deletions
+
                     if week_timestamp >= one_week_ago:
                         week_additions += additions
                         week_deletions += deletions
@@ -555,6 +544,8 @@ Languages:
             "month": (month_additions, month_deletions),
             "year": (year_additions, year_deletions),
         }
+        # Also set the all-time value to ensure consistency
+        self._lines_changed = (all_additions, all_deletions)
 
     @property
     async def lines_changed_past_week(self) -> Tuple[int, int]:
