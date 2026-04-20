@@ -74,7 +74,8 @@ class Queries(object):
         :return: deserialized REST JSON output
         """
 
-        for attempt in range(10):  # Reduced from 60 to 10 attempts
+        max_attempts = 60
+        for attempt in range(max_attempts):
             headers = {
                 "Authorization": f"token {self.access_token}",
             }
@@ -90,17 +91,21 @@ class Queries(object):
                         params=tuple(params.items()),
                     )
                 if r_async.status == 202:
-                    # print(f"{path} returned 202. Retrying...")
-                    if attempt < 3:  # Only print first 3 retries to reduce log spam
-                        print(f"A path returned 202. Retrying... (attempt {attempt + 1}/10)")
-                    await asyncio.sleep(min(1 + attempt * 0.5, 5))  # Progressive backoff: 1s, 1.5s, 2s... up to 5s
+                    if attempt < 3:
+                        print(f"A path returned 202. Retrying... (attempt {attempt + 1}/{max_attempts})")
+                    await asyncio.sleep(2)
                     continue
+                if r_async.status == 204:
+                    return dict()
+                if r_async.status != 200:
+                    print(f"Path {path} returned status {r_async.status}")
+                    return dict()
 
                 result = await r_async.json()
                 if result is not None:
                     return result
             except:
-                if attempt == 0:  # Only print error on first attempt
+                if attempt == 0:
                     print("aiohttp failed for rest query")
                 # Fall back on non-async requests
                 async with self.semaphore:
@@ -111,13 +116,17 @@ class Queries(object):
                     )
                     if r_requests.status_code == 202:
                         if attempt < 3:
-                            print(f"A path returned 202. Retrying... (attempt {attempt + 1}/10)")
-                        await asyncio.sleep(min(1 + attempt * 0.5, 5))
+                            print(f"A path returned 202. Retrying... (attempt {attempt + 1}/{max_attempts})")
+                        await asyncio.sleep(2)
                         continue
+                    elif r_requests.status_code == 204:
+                        return dict()
                     elif r_requests.status_code == 200:
                         return r_requests.json()
-        # print(f"There were too many 202s. Data for {path} will be incomplete.")
-        print("There were too many 202s. Data for this repository will be incomplete.")
+                    else:
+                        print(f"Path {path} returned status {r_requests.status_code}")
+                        return dict()
+        print(f"There were too many 202s for {path}. Data for this repository will be incomplete.")
         return dict()
 
     @staticmethod
@@ -509,15 +518,18 @@ Languages:
         year_additions, year_deletions = 0, 0
         all_additions, all_deletions = 0, 0
 
+        username_lower = self.username.lower()
         for repo in await self.repos:
             r = await self.queries.query_rest(f"/repos/{repo}/stats/contributors")
+            if not isinstance(r, list):
+                continue
             for author_obj in r:
                 if not isinstance(author_obj, dict) or not isinstance(
                     author_obj.get("author", {}), dict
                 ):
                     continue
                 author = author_obj.get("author", {}).get("login", "")
-                if author != self.username:
+                if author.lower() != username_lower:
                     continue
 
                 for week in author_obj.get("weeks", []):
