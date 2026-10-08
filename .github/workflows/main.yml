@@ -40,17 +40,14 @@ jobs:
         python3 -m pip install --upgrade pip setuptools wheel
         python3 -m pip install -r requirements.txt
 
-    # Generate all statistics images
-    - name: Generate images
-      run: |
-        python3 --version
-        python3 generate_images.py
+    # Static profile cards (activity, languages by commits, areas of work)
+    - name: Test card generator
+      run: python3 -m unittest discover -s tests -t .
+
+    - name: Generate cards
+      run: python3 make_cards.py
       env:
         ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        EXCLUDED: ${{ secrets.EXCLUDED }}
-        EXCLUDED_LANGS: CSS, Less, SCSS
-        EXCLUDE_FORKED_REPOS: true
 
     # Commit all changed files to the repository
     - name: Commit to the repo
