@@ -42,11 +42,11 @@ def _heading(title: str, subtitle: str, theme: dict) -> str:
 
 def _stat_tiles(stats: YearStats, theme: dict) -> str:
     tiles = (
+        (f"{stats.contributions:,}", "contributions"),
         (f"{stats.commits:,}", "commits"),
         (f"{stats.pull_requests:,}", "pull requests"),
         (f"{stats.reviews:,}", "reviews"),
         (f"{stats.active_days}", "active days"),
-        (f"{stats.longest_streak}", "day best streak"),
     )
     step = (WIDTH - 2 * PAD) / len(tiles)
     parts = []
@@ -89,7 +89,8 @@ def _sparkline(weekly: Sequence[int], theme: dict, top: int, height: int) -> str
 def activity_card(stats: YearStats, theme_name: str) -> str:
     theme = THEMES[theme_name]
     body = (
-        _heading("Last 12 months on GitHub", "Includes private repositories", theme)
+        _heading("Last 12 months on GitHub",
+                 f"Includes private repositories · {stats.longest_streak}-day best streak", theme)
         + _stat_tiles(stats, theme)
         + _sparkline(stats.weekly, theme, top=132, height=44)
     )

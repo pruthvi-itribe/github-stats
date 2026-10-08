@@ -15,7 +15,7 @@ def viewer(days, repos):
             "totalCommitContributions": 10, "totalPullRequestContributions": 2,
             "totalPullRequestReviewContributions": 1,
             "totalRepositoriesWithContributedCommits": len(repos),
-            "contributionCalendar": {"weeks": [
+            "contributionCalendar": {"totalContributions": 99, "weeks": [
                 {"contributionDays": [{"contributionCount": c} for c in days[i:i + 7]]}
                 for i in range(0, len(days), 7)]},
             "commitContributionsByRepository": repos,
@@ -61,6 +61,7 @@ class ParseTest(unittest.TestCase):
         self.assertEqual([r.name for r in stats.repo_commits], ["me/own"])
         self.assertEqual(stats.repo_commits[0].language, "Other")
         self.assertEqual((stats.active_days, stats.total_days, stats.longest_streak), (4, 7, 2))
+        self.assertEqual(stats.contributions, 99)
 
 
 class RenderTest(unittest.TestCase):

@@ -21,7 +21,7 @@ query {
       totalPullRequestContributions
       totalPullRequestReviewContributions
       totalRepositoriesWithContributedCommits
-      contributionCalendar { weeks { contributionDays { contributionCount } } }
+      contributionCalendar { totalContributions weeks { contributionDays { contributionCount } } }
       commitContributionsByRepository(maxRepositories: %d) {
         repository { nameWithOwner isFork primaryLanguage { name color } }
         contributions { totalCount }
@@ -43,6 +43,7 @@ class RepoCommits:
 @dataclass(frozen=True)
 class YearStats:
     name: str
+    contributions: int
     commits: int
     pull_requests: int
     reviews: int
@@ -93,6 +94,7 @@ def parse(viewer: dict) -> YearStats:
     )
     return YearStats(
         name=viewer["name"] or viewer["login"],
+        contributions=coll["contributionCalendar"]["totalContributions"],
         commits=coll["totalCommitContributions"],
         pull_requests=coll["totalPullRequestContributions"],
         reviews=coll["totalPullRequestReviewContributions"],
